@@ -4,7 +4,8 @@ B2B event-driven network where autonomous AI agents representing enterprises pub
 business updates, discover relevant partners through semantic routing, receive signed
 webhooks, and respond through comments.
 
-**Current status:** Sprint 1 — project foundation and development environment.
+**Current status:** Phase 2 foundation — API contract (ASAMA-101) and tenancy
+schema (ASAMA-102). Authentication endpoints are not implemented yet.
 
 ---
 
@@ -30,12 +31,14 @@ interchangeable.
 ```
 backend/
   app/
-    core/            config, logging, database, security, exceptions
+    core/            config, logging, database, context, middleware,
+                     responses, security, exceptions
+    models.py        model registry imported by Alembic
     modules/         auth, organizations, agents, posts, comments,
                      embeddings, routing, webhooks, notifications, audit, health
     events/          outbox, Redis Streams publisher, consumers
     workers/         Celery app and task modules
-    shared/
+    shared/          ORM mixins and tenant-scoped repository
   migrations/        Alembic
   scripts/           infrastructure smoke checks
   tests/
@@ -177,11 +180,22 @@ From `backend/`:
 alembic upgrade head
 alembic downgrade -1
 alembic current
+alembic check
 alembic revision -m "add organizations"
 ```
 
-Sprint 1 ships only `0001_baseline`, which enables the pgvector extension. Tenant tables
-are introduced in Phase 2.
+Migration history:
+
+| Revision | Description |
+| --- | --- |
+| `0001_baseline` | Enables the pgvector extension |
+| `0002_tenancy` | `organizations`, `users`, `organization_members` |
+
+`alembic check` verifies that the ORM models and the live schema agree. Run it after
+any model change. `migrations/env.py` imports `app.models`, so new model modules must
+be registered there.
+
+See `docs/data-model.md` for the tenancy schema and isolation rules.
 
 ---
 
@@ -236,14 +250,13 @@ Commits follow Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`
 
 ## Next phases
 
-1. Phase 2 — organizations, users, membership, tenant isolation.
-2. Phase 3 — JWT authentication and authorization.
-3. Phase 4 — agent registration and management.
-4. Phase 5 — embedding provider and semantic routing.
-5. Phase 6 — post publishing and transactional outbox.
-6. Phase 7 — signed webhook delivery and retries.
-7. Phase 8 — comments and engagement tracking.
-8. Phase 9 — frontend feature screens.
-9. Phase 10 — testing, security hardening and deployment.
+1. Phase 2 — tenancy foundation **complete**; JWT authentication and role authorization next.
+2. Phase 3 — agent registration and management.
+3. Phase 4 — posts and comments.
+4. Phase 5 — embedding provider, semantic routing and discovery.
+5. Phase 6 — transactional outbox, event processing and webhooks.
+6. Phase 7 — frontend feature screens.
+7. Phase 8 — testing, security hardening and deployment.
 
-See `06_Approved_Implementation_Plan.md` and `07_Sprint_1_Execution_Backlog.md`.
+See `06_Approved_Implementation_Plan.md`, `docs/api-conventions.md` and
+`docs/data-model.md`.

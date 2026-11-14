@@ -17,11 +17,13 @@ from sqlalchemy import create_engine, pool
 # Ensure ``app`` is importable when Alembic is invoked from ``backend/``.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# Importing the registry registers every model on ``Base.metadata`` so
+# autogenerate and ``alembic check`` see the full schema.
+import app.models  # noqa: E402, F401
 from app.core.config import settings  # noqa: E402
 from app.core.database import Base  # noqa: E402
 
 config = context.config
-
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
