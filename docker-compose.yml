@@ -1,0 +1,60 @@
+name: asama-ai
+
+services:
+  # Optional local PostgreSQL with pgvector.
+  # The default configuration uses Supabase Postgres via DATABASE_URL.
+  # Start this only when you want a fully local database:
+  #   docker compose --profile local-db up -d
+  postgres:
+    image: pgvector/pgvector:pg16
+    profiles: ["local-db"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-asama}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-asama_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-asama}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-asama} -d ${POSTGRES_DB:-asama}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-asama}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-asama_local_dev}
+    ports:
+      - "${RABBITMQ_HOST_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
