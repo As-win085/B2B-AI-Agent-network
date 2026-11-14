@@ -84,11 +84,14 @@ def error_response(
     *,
     details: list[dict[str, Any]] | None = None,
     request_id: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     """Build a JSON error response with the canonical envelope."""
 
     resolved_id = request_id or get_request_id()
-    headers = {REQUEST_ID_HEADER: resolved_id} if resolved_id else None
+    response_headers = dict(headers or {})
+    if resolved_id:
+        response_headers[REQUEST_ID_HEADER] = resolved_id
     return JSONResponse(
         status_code=status_code,
         content=error_payload(
@@ -97,5 +100,5 @@ def error_response(
             details=details,
             request_id=resolved_id,
         ),
-        headers=headers,
+        headers=response_headers or None,
     )

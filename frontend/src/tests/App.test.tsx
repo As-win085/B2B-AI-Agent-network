@@ -1,39 +1,26 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 
-const healthPayload = {
-  status: "ok",
-  service: "Asama.ai API",
-  version: "0.1.0",
-  environment: "local",
-  timestamp: "2026-11-14T07:00:00Z",
-};
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("App", () => {
-  it("renders the workspace and loads API health", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ data: healthPayload }),
-      }),
-    );
-
+  it("redirects anonymous visitors to the login page", async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/"]}>
         <App />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Asama.ai foundation is running")).toBeInTheDocument();
-    expect(await screen.findByText("Asama.ai API")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Operational");
+    expect(await screen.findByRole("heading", { name: /sign in to asama/i })).toBeInTheDocument();
   });
 
   it("renders the not-found page for unknown routes", () => {

@@ -9,7 +9,7 @@ Add every new model module to this list in the phase that introduces it.
 
 from __future__ import annotations
 
-from app.modules.auth.models import User
+from app.modules.auth.models import RefreshSession, User
 from app.modules.organizations.models import (
     Organization,
     OrganizationMember,
@@ -20,5 +20,6 @@ __all__ = [
     "Organization",
     "OrganizationMember",
     "OrganizationRole",
+    "RefreshSession",
     "User",
 ]

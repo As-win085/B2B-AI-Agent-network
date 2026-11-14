@@ -87,3 +87,28 @@ def test_tenant_columns_are_indexed() -> None:
 def test_users_are_not_tenant_owned() -> None:
     assert "organization_id" not in Base.metadata.tables["users"].columns
     assert "organization_id" in Base.metadata.tables["organization_members"].columns
+
+
+def test_refresh_sessions_are_registered() -> None:
+    table = Base.metadata.tables["refresh_sessions"]
+    assert table.primary_key.name == "pk_refresh_sessions"
+    assert "token_hash" in table.columns
+    assert "family_id" in table.columns
+    assert "active_organization_id" in table.columns
+
+    unique_names = {
+        constraint.name
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert "uq_refresh_sessions_token_hash" in unique_names
+
+
+def test_users_email_must_be_lowercase() -> None:
+    table = Base.metadata.tables["users"]
+    check_names = {
+        constraint.name
+        for constraint in table.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+    assert "ck_users_email_lowercase" in check_names

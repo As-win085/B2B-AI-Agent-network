@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # Authentication (Phase 3)
     jwt_secret_key: str = Field(min_length=16)
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
 

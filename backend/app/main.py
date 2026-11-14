@@ -20,8 +20,10 @@ from app.core.exceptions import AppError
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.responses import error_response
+from app.modules.auth.router import router as auth_router
 from app.modules.health.router import router as health_router
 from app.modules.health.router import versioned_router as versioned_health_router
+from app.modules.organizations.router import router as organizations_router
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,9 @@ def create_app() -> FastAPI:
     app.include_router(health_router, include_in_schema=False)
     # Versioned health endpoints (enveloped API contract).
     app.include_router(versioned_health_router, prefix=settings.api_v1_prefix)
+    # Human authentication and organization-scoped authorization.
+    app.include_router(auth_router, prefix=settings.api_v1_prefix)
+    app.include_router(organizations_router, prefix=settings.api_v1_prefix)
 
     @app.get("/", tags=["meta"])
     def root() -> dict:
@@ -85,6 +90,7 @@ def create_app() -> FastAPI:
             exc.message,
             details=exc.details,
             request_id=_request_id(request),
+            headers=exc.headers,
         )
 
     @app.exception_handler(RequestValidationError)

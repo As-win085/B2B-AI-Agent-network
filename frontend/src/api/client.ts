@@ -16,6 +16,41 @@ export class ApiError extends Error {
   }
 }
 
+export interface AuthHandlers {
+  /**
+   * Rotate the refresh token and return a fresh access token. The handler is
+   * single-flighted by ``apiRequest`` so concurrent 401s trigger one refresh.
+   */
+  refreshAccessToken: () => Promise<string>;
+  /** Called when a session can no longer be refreshed. */
+  onSessionExpired: () => void;
+}
+
+export interface ApiRequestInit extends RequestInit {
+  /** Do not attach the access token (used by login/register/refresh). */
+  skipAuth?: boolean;
+  /** Do not attempt a token refresh after a 401. */
+  allowRefresh?: boolean;
+}
+
+let accessToken: string | null = null;
+let authHandlers: AuthHandlers | null = null;
+let refreshInFlight: Promise<string | null> | null = null;
+
+/** Replace the in-memory access token (never persisted to storage). */
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
+/** Register the auth provider callbacks used for refresh and logout handling. */
+export function configureAuth(handlers: AuthHandlers | null): void {
+  authHandlers = handlers;
+  if (!handlers) {
+    accessToken = null;
+    refreshInFlight = null;
+  }
+}
+
 async function toApiError(response: Response): Promise<ApiError> {
   let body: ApiErrorBody | undefined;
   try {
@@ -34,16 +69,57 @@ async function toApiError(response: Response): Promise<ApiError> {
   );
 }
 
-export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
+function refreshAccessToken(): Promise<string | null> {
+  if (!authHandlers) {
+    return Promise.resolve(null);
+  }
+  if (!refreshInFlight) {
+    refreshInFlight = authHandlers
+      .refreshAccessToken()
+      .catch(() => {
+        authHandlers?.onSessionExpired();
+        return null;
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  const { skipAuth = false, allowRefresh = true, ...requestInit } = init;
+
+  const headers = new Headers(requestInit.headers);
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/json");
   }
+  if (requestInit.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const token = skipAuth ? null : accessToken;
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const url = `${API_BASE_URL}${path}`;
+  let response = await fetch(url, { ...requestInit, headers });
+
+  if (response.status === 401 && allowRefresh && !skipAuth && authHandlers) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      headers.set("Authorization", `Bearer ${refreshed}`);
+      response = await fetch(url, { ...requestInit, headers });
+    }
+  }
 
   if (!response.ok) {
-    throw await toApiError(response);
+    const error = await toApiError(response);
+    if (response.status === 401 && !skipAuth) {
+      authHandlers?.onSessionExpired();
+    }
+    throw error;
   }
 
   const body = (await response.json()) as ApiEnvelope<T>;
@@ -51,5 +127,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 }
 
 export async function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
-  return apiRequest<HealthResponse>("/api/v1/health", { method: "GET", signal });
+  return apiRequest<HealthResponse>("/api/v1/health", {
+    method: "GET",
+    signal,
+    skipAuth: true,
+    allowRefresh: false,
+  });
 }
