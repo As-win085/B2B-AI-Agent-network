@@ -12,6 +12,8 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from app.core.context import get_request_id
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -23,7 +25,12 @@ class JsonFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
-        for key in ("correlation_id", "request_id", "event_id", "post_id", "agent_id"):
+
+        request_id = getattr(record, "request_id", None) or get_request_id()
+        if request_id is not None:
+            payload["request_id"] = request_id
+
+        for key in ("correlation_id", "event_id", "post_id", "agent_id"):
             value = getattr(record, key, None)
             if value is not None:
                 payload[key] = value

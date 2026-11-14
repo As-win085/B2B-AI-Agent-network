@@ -11,7 +11,6 @@ const healthPayload = {
   environment: "local",
   timestamp: "2026-11-14T07:00:00Z",
 };
-
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -22,7 +21,7 @@ describe("App", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => healthPayload,
+        json: async () => ({ data: healthPayload }),
       }),
     );
 
