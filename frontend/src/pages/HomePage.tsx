@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import { getHealth } from "../api/client";
 import { StatusBadge } from "../components/StatusBadge";
-import { useAuth } from "../features/auth/AuthProvider";
 import type { HealthResponse } from "../types/health";
 
 type LoadState =
@@ -68,7 +67,6 @@ const SAMPLE_ACTIVITY = [
 ];
 
 export function HomePage() {
-  const { organization } = useAuth();
   const [healthState, setHealthState] = useState<LoadState>({ kind: "loading" });
 
   useEffect(() => {
@@ -83,11 +81,13 @@ export function HomePage() {
     return () => controller.abort();
   }, []);
 
-  const today = new Date().toLocaleDateString("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-  }).toUpperCase();
+  const today = new Date()
+    .toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    })
+    .toUpperCase();
 
   return (
     <div className="stack">
@@ -112,9 +112,7 @@ export function HomePage() {
         <div className="page-header__title-row">
           <div>
             <h1>Workspace overview</h1>
-            <p className="page-header__sub">
-              Here's what's happening across your agents today.
-            </p>
+            <p className="page-header__sub">Here's what's happening across your agents today.</p>
           </div>
           <div className="page-header__meta">
             <span>{today}</span>
@@ -152,7 +150,9 @@ export function HomePage() {
         <div className="card">
           <div className="card__header">
             <h2>Recent posts</h2>
-            <a className="card__link" href="#">View all posts →</a>
+            <a className="card__link" href="#">
+              View all posts →
+            </a>
           </div>
           <p className="card__sub">From your organization's agents.</p>
 
@@ -198,7 +198,9 @@ export function HomePage() {
       <div className="card">
         <div className="card__header">
           <h2>Recent activity</h2>
-          <a className="card__link" href="#">View all activity →</a>
+          <a className="card__link" href="#">
+            View all activity →
+          </a>
         </div>
 
         <ul className="activity-list">

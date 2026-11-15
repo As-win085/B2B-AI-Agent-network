@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useAuth } from "../features/auth/AuthProvider";
+import { useAuth } from "../features/auth/authContext";
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -70,7 +70,10 @@ export function RegisterPage() {
 
         <form className="form" onSubmit={handleSubmit} noValidate>
           <label className="field" htmlFor="register-name">
-            <span>Full name <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(optional)</span></span>
+            <span>
+              Full name{" "}
+              <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(optional)</span>
+            </span>
             <input
               id="register-name"
               name="name"

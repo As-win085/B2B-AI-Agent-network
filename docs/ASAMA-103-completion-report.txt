@@ -1,0 +1,210 @@
+ASAMA-103 — Phase 3 Completion Report
+=======================================
+Generated: Phase 3 review prior to ASAMA-104 start
+
+
+AUTOMATED SECURITY SCAN
+------------------------
+Scope  : Full scan — auth, organizations, core, tests (backend + frontend)
+Result : ZERO findings
+        Clean pass on SAST, secrets detection, code quality, security checks.
+
+
+IMPLEMENTED API ENDPOINTS
+--------------------------
+Method  Path                                          Notes
+------  --------------------------------------------  ------------------------------------------
+POST    /api/v1/auth/register                         201 — creates user + org + owner membership atomically
+POST    /api/v1/auth/login                            200 — issues access + refresh tokens
+POST    /api/v1/auth/refresh                          200 — rotates refresh token, revokes old session
+POST    /api/v1/auth/logout                           200 — revokes full token family, idempotent
+GET     /api/v1/auth/me                               200 — returns user + active org + all memberships
+GET     /api/v1/organizations                         Lists caller's orgs with roles
+POST    /api/v1/organizations/switch                  Switches active org on the session
+GET     /api/v1/organizations/{id}/members            Member-and-above only
+POST    /api/v1/organizations/{id}/members            Admin-and-above only
+PATCH   /api/v1/organizations/{id}                    Admin-and-above only
+DELETE  /api/v1/organizations/{id}/members/{mid}      Owner-protected, admin-removal rules enforced
+
+
+DATABASE TABLES AND MIGRATIONS
+--------------------------------
+Migration           Tables added
+------------------  -------------------------------------------------------
+0001_baseline       pgvector extension
+0002_tenancy        organizations, users, organization_members
+0003_auth_sessions  refresh_sessions, email_lowercase CHECK constraint
+
+refresh_sessions columns:
+  token_hash              SHA-256 hex digest — plaintext never stored
+  family_id               Rotation lineage — replaying any rotated token revokes the whole family
+  active_organization_id  FK to organizations (SET NULL on delete)
+  expires_at              Session expiry (timezone-aware)
+  revoked_at              Set on rotation, logout or reuse detection
+  revoked_reason          rotated | logout | reuse_detected | expired | account_inactive
+  replaced_by_id          FK to the successor session row
+
+
+JWT AND REFRESH-TOKEN IMPLEMENTATION
+--------------------------------------
+Access tokens
+  - Short-lived JWTs, signed HS256
+  - Bound to session_id (sid claim) — revocation is immediate; every request re-checks the session row
+  - Required claims validated: exp, iat, sub, sid, jti, type, iss, aud
+  - Issuer: asama.ai   Audience: asama.ai/api
+
+Refresh tokens
+  - 384-bit opaque random strings (secrets.token_urlsafe(48))
+  - Stored only as SHA-256 hex digests in refresh_sessions.token_hash
+  - Rotated on every use; old session row marked revoked_reason=rotated
+  - Family-based reuse detection: replaying any rotated token revokes all sessions in the family
+
+Password hashing
+  - stdlib hashlib.scrypt (N=16384, r=8, p=1, dklen=64, salt=16 bytes random)
+  - Self-describing versioned format: scrypt$N$r$p$<b64 salt>$<b64 digest>
+  - Automatic rehash on login when cost parameters are outdated (needs_rehash)
+  - Timing equalisation: dummy hash always evaluated when email is unknown
+  - Cost parameter bounds enforced on parse to prevent memory exhaustion from tampered rows
+
+
+ORGANIZATION AND ROLE AUTHORIZATION
+--------------------------------------
+Roles (descending privilege): owner > admin > member
+
+Enforcement:
+  - require_roles() dependency factory used in all protected routes
+  - Active organization resolved server-side from refresh_sessions.active_organization_id
+  - Membership re-validated against organization_members on every request — role changes apply immediately
+  - Cross-tenant access returns 404 (not 403) — no information leakage about other tenants
+
+Role boundary rules:
+  - Owner membership cannot be deleted
+  - Admins cannot grant admin role or remove other admins
+  - Only owners can remove admins
+  - Members can read but cannot manage membership or rename the organization
+
+
+FRONTEND AUTHENTICATION
+-------------------------
+AuthProvider (src/features/auth/AuthProvider.tsx)
+  - React context with status: loading | anonymous | authenticated
+  - Access token kept in memory only (never persisted)
+  - Refresh token stored in localStorage (see known issues below)
+  - On mount: attempts session restore via stored refresh token
+  - Wires API client for transparent single-retry token refresh on 401
+  - configureAuth(null) cleanup on unmount
+
+authStorage.ts
+  - Isolated read / write / clear for localStorage key "asama.refresh_token"
+  - Graceful fallback if localStorage is unavailable
+
+ProtectedRoute / PublicOnlyRoute
+  - Redirect guards with loading state (no flash of wrong content)
+  - ProtectedRoute: unauthenticated -> /login (preserves intended destination)
+  - PublicOnlyRoute: authenticated -> /
+
+API client (src/api/client.ts)
+  - Configured via configureAuth({ refreshAccessToken, onSessionExpired })
+  - Single in-flight refresh promise (no parallel refresh races)
+
+Pages
+  - LoginPage: client-side non-empty validation before API call
+  - RegisterPage: client-side password length check (>=12 chars) before API call
+
+
+TEST COVERAGE
+--------------
+Backend (unit tests — SQLite in-memory, no live infrastructure required):
+
+  test_auth_api.py
+    - Register: creates user + org + owner membership, normalises email, rejects duplicate
+      email (case-insensitive), rejects duplicate slug, generates unique slug for same name,
+      rejects weak password, rejects invalid email
+    - Login: correct credentials, case-insensitive email, wrong password (no detail leakage),
+      unknown email matches wrong-password response (timing equalisation verified)
+    - Me: requires authentication, returns user + org, rejects invalid token, rejects expired token
+    - Refresh: rotates tokens, revokes previous session, old access token invalidated,
+      replay of rotated token revokes whole family, unknown token rejected
+    - Logout: revokes session, idempotent for unknown token, access token stops working,
+      refresh token stops working
+
+  test_tokens.py
+    - Round-trip: create -> decode preserves all claims
+    - Expired token rejected (code: token_expired)
+    - Invalid signature rejected (code: invalid_token)
+    - Malformed claims rejected: wrong type, wrong issuer, wrong audience, non-UUID sub/sid
+    - Missing required claim rejected
+    - Garbage input rejected
+
+  test_password_security.py
+    - Hash never contains plaintext, starts with scrypt$
+    - Hash is salted (two hashes of same password differ, both verify)
+    - Correct password accepted, wrong password rejected
+    - Malformed / tampered / empty hash rejected safely
+    - Out-of-bounds cost parameters rejected (no unbounded allocation)
+    - needs_rehash: current hash -> False, legacy cost -> True, non-hash -> True
+    - Policy: rejects empty, short, leading/trailing whitespace, common passwords
+    - Policy: rejects overlong password, accepts long passphrase
+    - Refresh tokens: unique, length > 32, hash is 64-char hex, deterministic, distinct
+
+  test_authorization.py
+    - List organizations returns correct roles
+    - All organization endpoints require authentication (401 without token)
+    - Cross-tenant access returns 404 for members, switch, rename, delete
+    - Member: can read members, cannot rename, cannot add members, cannot delete members
+    - Admin: can rename, can add members (member role only), cannot grant admin,
+      can remove members, cannot remove other admins
+    - Owner protection: owner membership cannot be deleted
+    - Admin removal: only owner can remove an admin
+    - Organization switch: updates active context, me endpoint reflects new org + role
+    - Adding unknown user returns 404 (code: user_not_found)
+
+  test_tenant_isolation.py (integration — requires RUN_INTEGRATION_TESTS=1)
+    - TenantScopedRepository.list_all() returns only rows for the scoped org
+    - TenantScopedRepository.get() returns None for a row belonging to another org
+    - The row exists in the database; only the tenant predicate hides it
+    - Runs inside a rolled-back transaction — leaves no data behind
+
+Frontend (Vitest + Testing Library):
+
+  auth.test.tsx
+    - Login success: navigates to workspace, stores refresh token in localStorage
+    - Login failure: displays API error message in alert role
+    - Register: client-side password validation blocks API call for short password
+    - Register success: navigates to workspace, calls register with correct payload
+    - Logout: calls logout with stored refresh token, clears localStorage, returns to login page
+
+
+UNRESOLVED ISSUES / KNOWN FOLLOW-UPS
+---------------------------------------
+Item                                  Severity  Notes
+------------------------------------  --------  -------------------------------------------------------
+Refresh token in localStorage         Medium    Documented in authStorage.ts. XSS could steal it.
+                                                Planned migration to httpOnly cookie + CSRF token.
+                                                No XSS vectors exist yet; acceptable for Phase 3.
+
+No rate limiting on auth endpoints    Low       No brute-force protection on /login or /refresh.
+                                                Must be addressed before production (Phase 10).
+
+No email verification flow            Low       is_verified column exists, always false.
+                                                Verification email not implemented.
+                                                Tracked for a later phase.
+
+SQLite used for unit tests            Info      pgvector-specific behaviour (HNSW, vector ops) not
+                                                exercised in unit tests. Integration tests cover
+                                                the real PostgreSQL database.
+
+
+VERDICT FOR ASAMA-104
+-----------------------
+Phase 3 is solid. Token model, tenant isolation and role enforcement are correct and fully tested.
+Agent management can be built on top of this foundation safely.
+
+The following dependencies are ready for Phase 4 to consume:
+
+  OrganizationContextDep   Resolves authenticated user + active org + role in one dependency.
+  require_roles(*roles)    Dependency factory for endpoint-level role enforcement.
+  PrincipalDep             Authenticated user + session + all memberships (no org required).
+
+Phase 4 agent endpoints will use OrganizationContextDep to scope every agent operation
+to the caller's active organization and require_roles to enforce owner/admin gates.
