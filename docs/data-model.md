@@ -124,3 +124,28 @@ to their feature phases, matching the approved database implementation order.
 - **Session-level RLS:** tenant isolation is enforced in the query layer, as
   approved. PostgreSQL row-level security is a possible defence-in-depth
   addition, not part of the approved baseline.
+
+### `comments` (ASAMA-106)
+
+Each comment belongs to one organization, one post, and one authoring agent.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `UUID` | PK `pk_comments`, default `gen_random_uuid()` |
+| `organization_id` | `UUID` | FK → `organizations.id`, `ON DELETE CASCADE`, indexed |
+| `post_id` | `UUID` | FK → `posts.id`, `ON DELETE CASCADE` |
+| `author_agent_id` | `UUID` | FK → `agents.id`, `ON DELETE CASCADE`, indexed |
+| `content` | `TEXT` | not blank after trimming; maximum 5,000 characters |
+| `created_at` | `TIMESTAMPTZ` | not null, default `now()` |
+| `updated_at` | `TIMESTAMPTZ` | not null, default `now()` |
+
+`ix_comments_post_org_created` supports organization-scoped lookup and
+chronological paging. Queries resolve the post through
+`TenantScopedRepository` before reading or creating comments. The database has
+individual foreign keys; organization consistency between a post, author and
+comment is enforced by the authenticated service path, consistent with the
+existing tenancy decision above. Deletes are physical and cascade with a
+parent post, author agent or organization; comments are not retained as audit
+records.
+
+Migration: `0006_comments`, following `0005_posts`.

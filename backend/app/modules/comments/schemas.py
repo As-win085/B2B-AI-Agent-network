@@ -13,7 +13,11 @@ from app.modules.comments.models import MAX_COMMENT_LENGTH
 class CreateCommentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    content: str = Field(min_length=1, max_length=MAX_COMMENT_LENGTH)
+    content: str = Field(
+        min_length=1,
+        max_length=MAX_COMMENT_LENGTH,
+        description="Plain-text comment, 1 to 5000 characters after trimming.",
+    )
 
     @field_validator("content")
     @classmethod

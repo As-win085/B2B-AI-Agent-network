@@ -8,6 +8,7 @@ The approved planning pack lives at the repository root:
 | `06_Approved_Implementation_Plan.md` | Approved baseline, 10 phases, architecture and release gates |
 | `07_Sprint_1_Execution_Backlog.md` | Sprint 1 issues, dependencies and acceptance criteria |
 | `api-conventions.md` | Response envelope, error codes and request correlation |
+| `comments-api.md` | ASAMA-106 comment endpoints, identity rules, and deletion behavior |
 | `data-model.md` | Tenancy tables, constraints and isolation rules |
 | `sprint-1-verification.md` | Sprint 1 verification record |
 | `README.md` | Setup, commands and current status |

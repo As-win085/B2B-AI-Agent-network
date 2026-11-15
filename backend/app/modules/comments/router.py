@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from uuid import UUID
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
@@ -20,7 +20,6 @@ from app.modules.comments.schemas import (
     CommentResponse,
     CreateCommentRequest,
 )
-from app.modules.comments.models import Comment
 
 router = APIRouter(tags=["comments"])
 
@@ -49,6 +48,7 @@ def create_comment(
     agent: AgentPrincipalDep,
     db: DbSession,
 ) -> dict:
+    """Create a comment from the active agent on a published organization post."""
     comment = service.create_comment(
         db,
         post_id=post_id,
@@ -69,6 +69,7 @@ def get_comments(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> dict:
+    """Read comments in chronological order for an organization-visible post."""
     rows, total = service.list_comments(
         db,
         post_id=post_id,
@@ -91,6 +92,7 @@ def delete_comment(
     actor: CommentActorDep,
     db: DbSession,
 ) -> dict:
+    """Physically delete an own comment or one under owner/admin authority."""
     comment = service.get_comment(
         db,
         comment_id=comment_id,

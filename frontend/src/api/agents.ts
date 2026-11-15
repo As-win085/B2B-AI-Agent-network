@@ -1,6 +1,14 @@
 import { apiRequest } from "./client";
 import type { Agent, AgentCredential, IssuedCredential } from "../types/agents";
 
+export function getAuthenticatedAgent(key: string): Promise<Agent> {
+  return apiRequest<Agent>("/api/v1/agents/me", {
+    skipAuth: true,
+    allowRefresh: false,
+    headers: { Authorization: `Bearer ${key}` },
+  });
+}
+
 export function listAgents(): Promise<Agent[]> {
   return apiRequest<Agent[]>("/api/v1/agents");
 }

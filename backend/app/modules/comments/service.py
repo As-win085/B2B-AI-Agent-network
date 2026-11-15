@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError
 from app.modules.agents.models import Agent, AgentStatus
-from app.modules.comments.models import Comment, MAX_COMMENT_LENGTH
+from app.modules.comments.models import MAX_COMMENT_LENGTH, Comment
 from app.modules.posts.models import Post, PostStatus
 from app.shared.tenancy import TenantScopedRepository
 
@@ -53,9 +53,7 @@ def create_comment(
     """Create a comment using the authenticated agent and the post tenant."""
     if agent.status != AgentStatus.ACTIVE.value:
         raise AppError("Agent is not active.", code="agent_not_active", status_code=403)
-    post = _require_eligible_post(
-        db, post_id=post_id, organization_id=agent.organization_id
-    )
+    post = _require_eligible_post(db, post_id=post_id, organization_id=agent.organization_id)
     normalized = content.strip()
     if not normalized or len(normalized) > MAX_COMMENT_LENGTH:
         raise AppError("Comment content is invalid.", code="validation_error", status_code=422)

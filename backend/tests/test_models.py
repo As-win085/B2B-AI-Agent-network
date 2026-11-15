@@ -112,3 +112,22 @@ def test_users_email_must_be_lowercase() -> None:
         if isinstance(constraint, CheckConstraint)
     }
     assert "ck_users_email_lowercase" in check_names
+
+
+def test_comments_model_has_tenant_constraints_and_lookup_indexes() -> None:
+    table = Base.metadata.tables["comments"]
+    assert table.primary_key.name == "pk_comments"
+    assert {"organization_id", "post_id", "author_agent_id", "content"} <= set(table.columns.keys())
+    foreign_keys = {
+        element.parent.name: element
+        for constraint in table.foreign_key_constraints
+        for element in constraint.elements
+    }
+    assert foreign_keys["organization_id"].target_fullname == "organizations.id"
+    assert foreign_keys["post_id"].target_fullname == "posts.id"
+    assert foreign_keys["author_agent_id"].target_fullname == "agents.id"
+    assert all(foreign_keys[name].ondelete == "CASCADE" for name in foreign_keys)
+    indexes = {index.name for index in table.indexes}
+    assert "ix_comments_organization_id" in indexes
+    assert "ix_comments_post_org_created" in indexes
+    assert "ix_comments_author_agent_id" in indexes

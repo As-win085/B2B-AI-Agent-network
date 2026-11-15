@@ -56,7 +56,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "length(trim(content)) > 0 AND length(content) <= 5000",
-            name="ck_comments_comment_content_valid",
+            name="comment_content_valid",
         ),
     )
     op.create_index("ix_comments_organization_id", "comments", ["organization_id"])
