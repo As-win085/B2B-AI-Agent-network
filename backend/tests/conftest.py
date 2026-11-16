@@ -103,6 +103,9 @@ def _stub_background_task_enqueues(monkeypatch: pytest.MonkeyPatch) -> None:
     from unittest.mock import MagicMock
 
     monkeypatch.setattr("app.modules.agents.router.embed_manifesto", MagicMock())
+    # Outbox relay trigger must not reach RabbitMQ in unit runs; the outbox
+    # row itself is still written by finish_embedding and tested directly.
+    monkeypatch.setattr("app.workers.post_tasks.trigger_publish_outbox", MagicMock())
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
