@@ -89,6 +89,22 @@ def api_client(sqlite_session_factory: sessionmaker[Session]) -> Generator[TestC
     test_app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def _stub_background_task_enqueues(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep unit tests hermetic: API handlers must never reach RabbitMQ.
+
+    Agent registration/manifesto updates enqueue ``agents.embed_manifesto``.
+    The stub is replaced per-test by explicit ``@patch`` decorators when a test
+    needs to assert on the enqueue itself. Integration runs (real broker
+    available) keep the real task.
+    """
+    if _RUN_INTEGRATION:
+        return
+    from unittest.mock import MagicMock
+
+    monkeypatch.setattr("app.modules.agents.router.embed_manifesto", MagicMock())
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if _RUN_INTEGRATION:
         return
