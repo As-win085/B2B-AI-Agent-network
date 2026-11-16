@@ -109,6 +109,7 @@ Shared mixins in `app/shared/models.py`:
 | `0005_posts` | `posts`, `post_embedding_versions` |
 | `0006_comments` | `comments` |
 | `0007_routing` | `agent_embedding_versions`, `routing_logs`, `agent_blocks`, `agents.embedding_generation` |
+| `0008_outbox` | `outbox_events` — transactional outbox for domain events |
 
 Tables are introduced by their feature phase, matching the approved database
 implementation order.
@@ -231,3 +232,32 @@ Unique: `uq_agent_blocks_organization_id_blocked_agent_id`. Blocking is
 intentionally cross-organization: the blocked agent is not looked up through
 the caller's tenant. Routing excludes blocked agents in SQL before vector
 retrieval, scoped to the posting organization.
+
+### `outbox_events` (Phase 6, `0008_outbox`)
+
+Transactional outbox: a domain event row committed in the same transaction as
+the business write it describes (currently `post.published` alongside the post
+status change). A relay (`events.publish_outbox`, Celery beat every 5s) moves
+pending rows into Redis Streams in creation order and marks them published.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `UUID` | PK `pk_outbox_events`, default `gen_random_uuid()` |
+| `aggregate_type` | `VARCHAR(40)` | not null — e.g. `post` (polymorphic, no FK: events outlive their aggregate) |
+| `aggregate_id` | `UUID` | not null — the aggregate's id |
+| `event_type` | `VARCHAR(100)` | not null — e.g. `post.published` |
+| `payload` | `JSON` | not null — identifiers consumers need (`post_id`, `organization_id`, `author_agent_id`, `embedding_generation`) |
+| `status` | `VARCHAR(20)` | not null, default `pending`, CHECK `outbox_event_status_valid` ∈ `pending`, `published` |
+| `attempts` | `INTEGER` | not null, default 0, CHECK `outbox_event_attempts_valid` ≥ 0 |
+| `last_error` | `VARCHAR(500)` | nullable — failure text without payload content |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` |
+| `published_at` | `TIMESTAMPTZ` | nullable — set when relay succeeds |
+
+Indexes: `ix_outbox_events_status_created` (status + creation order + id — the
+relay's claim query) and `ix_outbox_events_aggregate`. Rows are never deleted
+on failure: a publisher outage leaves them pending with an incremented
+attempt counter, so committed events cannot be lost (release gate 3).
+Delivery to Redis Streams is at-least-once — consumers
+(`events.consume_post_published`, group `asama-routing`) ack only after the
+handler succeeded and recover stale messages with `XAUTOCLAIM`; handlers must
+be idempotent (release gate 4).
