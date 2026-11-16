@@ -523,6 +523,31 @@ def test_route_post_worker_task_executes_engine(
     assert _log_count(db, post.id) == 4
 
 
+def test_concurrent_re_edit_aborts_routing_before_writing(
+    routing_scenario: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = routing_scenario["db"]
+    post = routing_scenario["post"]
+    original_rerank = service._rerank
+
+    def editing_rerank(post_arg: Post, candidates: list) -> tuple:
+        result = original_rerank(post_arg, candidates)
+        # Simulate the author's re-edit committing during the (slow) rerank
+        # call: status becomes processing and stale decisions are voided.
+        post_arg.status = PostStatus.PROCESSING.value
+        db.commit()
+        return result
+
+    monkeypatch.setattr(service, "_rerank", editing_rerank)
+
+    outcome = service.route_post(db, post_id=post.id)
+
+    assert outcome.routed is False
+    assert outcome.reason == "post_editing"
+    assert _log_count(db, post.id) == 0
+
+
 def test_post_edit_voids_stale_routing_decisions(
     routing_scenario: dict[str, object],
 ) -> None:

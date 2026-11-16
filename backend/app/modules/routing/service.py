@@ -211,6 +211,7 @@ def route_post(db: Session, *, post_id: UUID) -> RoutingOutcome:
         return RoutingOutcome(post_id, routed=False, reason="post_not_published")
     if post.embedding is None or not post.embedding_provider or not post.embedding_model:
         return RoutingOutcome(post_id, routed=False, reason="post_embedding_missing")
+    post_generation = post.embedding_generation
 
     existing = db.scalar(
         select(func.count()).select_from(RoutingLog).where(RoutingLog.post_id == post_id)
@@ -281,6 +282,18 @@ def route_post(db: Session, *, post_id: UUID) -> RoutingOutcome:
                 reranker_model=reranker_model,
             )
         )
+
+    # Serialize against a concurrent re-edit before writing: lock the post
+    # row for the rest of this transaction. An author's edit either waits
+    # here and then voids these logs, or it has already committed — in which
+    # case routing the superseded content aborts instead of leaving stale
+    # decisions that would block re-routing after re-publish.
+    current = db.execute(
+        select(Post.status, Post.embedding_generation).where(Post.id == post_id).with_for_update()
+    ).first()
+    if current is None or current[0] != PostStatus.PUBLISHED.value or current[1] != post_generation:
+        db.rollback()
+        return RoutingOutcome(post_id, routed=False, reason="post_editing")
 
     db.add_all(logs)
     try:
