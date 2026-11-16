@@ -25,6 +25,7 @@ from app.modules.auth.router import router as auth_router
 from app.modules.comments.router import router as comments_router
 from app.modules.health.router import router as health_router
 from app.modules.health.router import versioned_router as versioned_health_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.organizations.router import router as organizations_router
 from app.modules.posts.router import router as posts_router
 from app.modules.routing.router import router as routing_router
@@ -60,7 +61,7 @@ def create_app() -> FastAPI:
     # also covers preflight responses added below).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.frontend_origin],
+        allow_origins=settings.allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(posts_router, prefix=settings.api_v1_prefix)
     app.include_router(comments_router, prefix=settings.api_v1_prefix)
     app.include_router(routing_router, prefix=settings.api_v1_prefix)
+    app.include_router(notifications_router, prefix=settings.api_v1_prefix)
 
     @app.get("/", tags=["meta"])
     def root() -> dict:

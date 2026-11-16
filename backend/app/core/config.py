@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     api_v1_prefix: str = "/api/v1"
     log_level: str = "INFO"
-    frontend_origin: str = "http://localhost:5173"
+    frontend_origins: str = "http://localhost:5173"
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        return [o.strip() for o in self.frontend_origins.split(",") if o.strip()]
 
     # Data stores
     database_url: str = Field(min_length=1)
@@ -53,6 +57,15 @@ class Settings(BaseSettings):
     webhook_secret_encryption_key: str = Field(min_length=16)
     webhook_timeout_seconds: int = 10
     webhook_max_attempts: int = 5
+
+    # Webhook delivery retries (Phase 7)
+    webhook_retry_base_seconds: float = 5.0
+    webhook_retry_max_seconds: float = 3600.0
+    webhook_sweep_batch: int = 50
+
+    # Engagement window (Phase 7, FR-16): delivered notifications without a
+    # recipient response inside this window become IGNORED.
+    engagement_window_days: int = 7
 
     # Embeddings / reranking (Phase 5)
     embedding_provider: str = "openai"
