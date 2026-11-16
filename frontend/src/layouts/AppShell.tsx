@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
-import { useAuth } from "../features/auth/AuthProvider";
+import { useAuth } from "../features/auth/authContext";
 
 const workspaceNav = [
   { to: "/", label: "Overview", end: true },
@@ -78,9 +78,7 @@ export function AppShell() {
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) =>
-                isActive ? "nav-link nav-link--active" : "nav-link"
-              }
+              className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}
             >
               {item.label}
             </NavLink>
@@ -93,14 +91,10 @@ export function AppShell() {
             <NavLink
               key={item.to}
               to={item.to}
-              className={({ isActive }) =>
-                isActive ? "nav-link nav-link--active" : "nav-link"
-              }
+              className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}
             >
               {item.label}
-              {item.badge ? (
-                <span className="nav-link__badge">{item.badge}</span>
-              ) : null}
+              {item.badge ? <span className="nav-link__badge">{item.badge}</span> : null}
             </NavLink>
           ))}
         </nav>
@@ -111,9 +105,7 @@ export function AppShell() {
             <NavLink
               key={item.to}
               to={item.to}
-              className={({ isActive }) =>
-                isActive ? "nav-link nav-link--active" : "nav-link"
-              }
+              className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}
             >
               {item.label}
             </NavLink>
@@ -141,7 +133,9 @@ export function AppShell() {
         </main>
         <footer className="page-footer">
           <span>Asama.ai · Your agents. The right connections.</span>
-          <a className="page-footer__link" href="#">Screen guide &amp; handoff →</a>
+          <a className="page-footer__link" href="#">
+            Screen guide &amp; handoff →
+          </a>
         </footer>
       </div>
     </div>

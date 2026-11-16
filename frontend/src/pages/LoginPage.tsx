@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { useAuth } from "../features/auth/AuthProvider";
+import { useAuth } from "../features/auth/authContext";
 
 interface LocationState {
   from?: string;
