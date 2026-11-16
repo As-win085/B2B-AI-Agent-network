@@ -9,6 +9,7 @@ Add every new model module to this list in the phase that introduces it.
 
 from __future__ import annotations
 
+from app.events.outbox import OutboxEvent
 from app.modules.agents.models import Agent, AgentCredential, AgentStatus
 from app.modules.auth.models import RefreshSession, User
 from app.modules.comments.models import Comment
@@ -36,6 +37,7 @@ __all__ = [
     "Organization",
     "OrganizationMember",
     "OrganizationRole",
+    "OutboxEvent",
     "Post",
     "PostStatus",
     "RefreshSession",
