@@ -44,5 +44,10 @@ celery_app.conf.update(
             "task": "events.consume_post_published",
             "schedule": 2.0,
         },
+        # Webhook retry engine: re-enqueues deliveries whose backoff elapsed.
+        "webhook-sweep": {
+            "task": "webhooks.sweep",
+            "schedule": 5.0,
+        },
     },
 )

@@ -104,6 +104,12 @@ def update_post_by_author(
         # void: clearing them keeps the (post_id, agent_id) uniqueness rule
         # intact so the next publish routes the edited content fresh.
         db.execute(delete(RoutingLog).where(RoutingLog.post_id == post_id))
+        # Webhook deliveries are voided with them: stale-content notifications
+        # must not survive to collide with the fresh routing after re-publish
+        # (unique post+recipient) or contradict it in delivery history.
+        from app.modules.webhooks.service import void_post_deliveries
+
+        void_post_deliveries(db, post_id=post_id)
 
     db.commit()
     db.refresh(post)

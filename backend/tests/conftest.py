@@ -106,6 +106,10 @@ def _stub_background_task_enqueues(monkeypatch: pytest.MonkeyPatch) -> None:
     # Outbox relay trigger must not reach RabbitMQ in unit runs; the outbox
     # row itself is still written by finish_embedding and tested directly.
     monkeypatch.setattr("app.workers.post_tasks.trigger_publish_outbox", MagicMock())
+    # Webhook task enqueue is best-effort everywhere: stub the Celery task so
+    # routing/retry paths never touch RabbitMQ. Tests call the delivery
+    # service directly instead.
+    monkeypatch.setattr("app.workers.webhook_tasks.deliver", MagicMock())
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

@@ -26,6 +26,7 @@ from app.modules.routing.models import (
     RoutingDecision,
     RoutingLog,
 )
+from app.modules.webhooks.models import WebhookDelivery, WebhookDeliveryAttempt
 
 __all__ = [
     "Agent",
@@ -45,4 +46,6 @@ __all__ = [
     "RoutingDecision",
     "RoutingLog",
     "User",
+    "WebhookDelivery",
+    "WebhookDeliveryAttempt",
 ]

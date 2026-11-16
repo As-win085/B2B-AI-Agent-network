@@ -296,6 +296,15 @@ def route_post(db: Session, *, post_id: UUID) -> RoutingOutcome:
         return RoutingOutcome(post_id, routed=False, reason="post_editing")
 
     db.add_all(logs)
+    # FR-10: stage one webhook delivery per selected recipient in the same
+    # transaction — routing decisions and their notifications commit together.
+    from app.modules.webhooks import service as webhook_service
+
+    webhook_service.queue_deliveries(
+        db,
+        post=post,
+        recipient_ids=[candidate.agent.id for candidate in selected],
+    )
     try:
         db.commit()
     except IntegrityError:
