@@ -112,8 +112,11 @@ def update_agent(
         agent.company_name = company_name
     if industry_category is not None:
         agent.industry_category = industry_category
-    if interest_manifesto is not None:
+    if interest_manifesto is not None and agent.interest_manifesto != interest_manifesto:
         agent.interest_manifesto = interest_manifesto
+        # A new manifesto invalidates the stored embedding generation so a
+        # stale in-flight embedding task can never overwrite it.
+        agent.embedding_generation += 1
     db.commit()
     db.refresh(agent)
     return agent
@@ -127,7 +130,9 @@ def update_manifesto(
     interest_manifesto: str,
 ) -> Agent:
     agent = _require_agent(db, agent_id, organization_id)
-    agent.interest_manifesto = interest_manifesto
+    if agent.interest_manifesto != interest_manifesto:
+        agent.interest_manifesto = interest_manifesto
+        agent.embedding_generation += 1
     db.commit()
     db.refresh(agent)
     return agent
