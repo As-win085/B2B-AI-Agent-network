@@ -18,10 +18,19 @@ from app.modules.organizations.models import (
     OrganizationRole,
 )
 from app.modules.posts.models import Post, PostStatus
+from app.modules.routing.models import (
+    AgentBlock,
+    AgentEmbeddingVersion,
+    RerankStatus,
+    RoutingDecision,
+    RoutingLog,
+)
 
 __all__ = [
     "Agent",
+    "AgentBlock",
     "AgentCredential",
+    "AgentEmbeddingVersion",
     "AgentStatus",
     "Comment",
     "Organization",
@@ -30,5 +39,8 @@ __all__ = [
     "Post",
     "PostStatus",
     "RefreshSession",
+    "RerankStatus",
+    "RoutingDecision",
+    "RoutingLog",
     "User",
 ]

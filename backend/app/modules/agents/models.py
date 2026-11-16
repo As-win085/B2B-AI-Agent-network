@@ -21,6 +21,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
@@ -65,6 +66,13 @@ class Agent(Base, UUIDPrimaryKeyMixin, TimestampMixin, TenantMixin):
         String(20),
         nullable=False,
         server_default=text("'active'"),
+    )
+    # Bumped whenever the interest manifesto changes so a slow embedding task
+    # can never overwrite the embedding of a newer generation.
+    embedding_generation: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("1"),
     )
 
     credentials: Mapped[list[AgentCredential]] = relationship(
