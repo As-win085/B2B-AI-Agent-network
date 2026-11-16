@@ -7,6 +7,7 @@ only for machine-to-machine endpoints in later phases.
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, status
@@ -15,6 +16,7 @@ from app.core.dependencies import DbSession
 from app.core.responses import ApiResponse, success
 from app.modules.agents import service
 from app.modules.agents.dependencies import AgentPrincipalDep
+from app.modules.agents.models import Agent
 from app.modules.agents.schemas import (
     AgentResponse,
     AgentStatusAction,
@@ -28,11 +30,32 @@ from app.modules.agents.schemas import (
     WebhookConfigResponse,
 )
 from app.modules.auth.dependencies import OrganizationContextDep, require_roles
+from app.workers.agent_tasks import embed_manifesto
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 # Only owners and admins may manage agents.
 _ADMIN_DEP = require_roles("owner", "admin")
+
+
+def _queue_manifesto_embedding(agent: Agent) -> None:
+    """Best-effort enqueue of the versioned manifesto embedding task.
+
+    Unlike post publication, a queue outage must not fail agent management:
+    the idempotent backfill (:func:`app.modules.embeddings.service.
+    backfill_agent_embeddings`) picks up anything missed here.
+    """
+    if not (agent.interest_manifesto or "").strip():
+        return
+    try:
+        embed_manifesto.delay(str(agent.id), agent.embedding_generation)
+    except Exception:
+        logger.warning(
+            "Agent manifesto embedding enqueue failed",
+            extra={"agent_id": str(agent.id), "generation": agent.embedding_generation},
+        )
 
 
 @router.post(
@@ -54,6 +77,7 @@ def register_agent(
         industry_category=payload.industry_category,
         interest_manifesto=payload.interest_manifesto,
     )
+    _queue_manifesto_embedding(agent)
     return success(AgentResponse.from_orm_agent(agent))
 
 
@@ -106,6 +130,8 @@ def update_agent(
         industry_category=payload.industry_category,
         interest_manifesto=payload.interest_manifesto,
     )
+    if payload.interest_manifesto is not None:
+        _queue_manifesto_embedding(agent)
     return success(AgentResponse.from_orm_agent(agent))
 
 
@@ -158,6 +184,7 @@ def update_manifesto(
         organization_id=ctx.organization.id,
         interest_manifesto=payload.interest_manifesto,
     )
+    _queue_manifesto_embedding(agent)
     return success(AgentResponse.from_orm_agent(agent))
 
 

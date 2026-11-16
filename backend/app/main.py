@@ -27,6 +27,7 @@ from app.modules.health.router import router as health_router
 from app.modules.health.router import versioned_router as versioned_health_router
 from app.modules.organizations.router import router as organizations_router
 from app.modules.posts.router import router as posts_router
+from app.modules.routing.router import router as routing_router
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(agents_router, prefix=settings.api_v1_prefix)
     app.include_router(posts_router, prefix=settings.api_v1_prefix)
     app.include_router(comments_router, prefix=settings.api_v1_prefix)
+    app.include_router(routing_router, prefix=settings.api_v1_prefix)
 
     @app.get("/", tags=["meta"])
     def root() -> dict:

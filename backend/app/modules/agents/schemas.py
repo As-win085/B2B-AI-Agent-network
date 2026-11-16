@@ -82,6 +82,7 @@ class AgentResponse(BaseModel):
     webhook_url: str | None
     webhook_configured: bool
     status: str
+    embedding_generation: int
     created_at: datetime
     updated_at: datetime
 
@@ -99,6 +100,7 @@ class AgentResponse(BaseModel):
             webhook_url=a.webhook_url,
             webhook_configured=a.webhook_secret_encrypted is not None,
             status=a.status,
+            embedding_generation=a.embedding_generation,
             created_at=a.created_at,
             updated_at=a.updated_at,
         )

@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError
 from app.modules.agents.models import Agent
 from app.modules.posts.models import Post, PostStatus
+from app.modules.routing.models import RoutingLog
 from app.shared.tenancy import TenantScopedRepository
 
 
@@ -98,6 +99,10 @@ def update_post_by_author(
         post.published_at = None
         post.failure_code = None
         post.status = PostStatus.PROCESSING.value
+        # Routing decisions referenced the previous content generation and are
+        # void: clearing them keeps the (post_id, agent_id) uniqueness rule
+        # intact so the next publish routes the edited content fresh.
+        db.execute(delete(RoutingLog).where(RoutingLog.post_id == post_id))
 
     db.commit()
     db.refresh(post)
