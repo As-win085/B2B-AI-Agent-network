@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.events.publisher import trigger_publish_outbox
 from app.modules.embeddings.provider import (
     get_embedding_provider,
     validate_embedding,
@@ -34,7 +35,7 @@ def embed_and_publish(post_id: str, generation: int) -> None:
                 failure_code="embedding_unavailable",
             )
             return
-        service.finish_embedding(
+        published = service.finish_embedding(
             db,
             post_id=UUID(post_id),
             generation=generation,
@@ -42,3 +43,7 @@ def embed_and_publish(post_id: str, generation: int) -> None:
             provider=result.provider,
             model=result.model,
         )
+    if published:
+        # Low-latency relay run; the beat schedule recovers anything this
+        # best-effort trigger misses (outbox rows stay pending until then).
+        trigger_publish_outbox()

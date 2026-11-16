@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError
+from app.events.outbox import POST_PUBLISHED, record_event
 from app.modules.agents.models import Agent
 from app.modules.posts.models import Post, PostStatus
 from app.modules.routing.models import RoutingLog
@@ -203,6 +204,20 @@ def finish_embedding(
     post.failure_code = None
     post.status = PostStatus.PUBLISHED.value
     post.published_at = datetime.now(UTC)
+    # Transactional outbox: the event row commits atomically with the status
+    # change, so a published post can never exist without its event.
+    record_event(
+        db,
+        aggregate_type="post",
+        aggregate_id=post.id,
+        event_type=POST_PUBLISHED,
+        payload={
+            "post_id": str(post.id),
+            "organization_id": str(post.organization_id),
+            "author_agent_id": str(post.author_agent_id),
+            "embedding_generation": post.embedding_generation,
+        },
+    )
     db.commit()
     return True
 
