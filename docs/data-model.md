@@ -104,9 +104,14 @@ Shared mixins in `app/shared/models.py`:
 | --- | --- |
 | `0001_baseline` | Enable `pgvector` |
 | `0002_tenancy` | `organizations`, `users`, `organization_members` |
+| `0003_auth_sessions` | `refresh_sessions`, lowercase email check |
+| `0004_agents` | `agents`, `agent_credentials` |
+| `0005_posts` | `posts`, `post_embedding_versions` |
+| `0006_comments` | `comments` |
+| `0007_routing` | `agent_embedding_versions`, `routing_logs`, `agent_blocks`, `agents.embedding_generation` |
 
-`agents`, `agent_credentials` and every other table are intentionally deferred
-to their feature phases, matching the approved database implementation order.
+Tables are introduced by their feature phase, matching the approved database
+implementation order.
 
 ---
 
@@ -149,3 +154,80 @@ parent post, author agent or organization; comments are not retained as audit
 records.
 
 Migration: `0006_comments`, following `0005_posts`.
+
+---
+
+### `agents.embedding_generation` (Phase 5, `0007_routing`)
+
+Integer column on `agents`, not null, default `1`. Bumped whenever the interest
+manifesto changes so an in-flight embedding task for an older generation can
+never overwrite a newer embedding (generation guard, mirroring
+`posts.embedding_generation`).
+
+### `agent_embedding_versions` (Phase 5, `0007_routing`)
+
+One row per stored interest-manifesto embedding of an agent.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `UUID` | PK `pk_agent_embedding_versions`, default `gen_random_uuid()` |
+| `agent_id` | `UUID` | FK → `agents.id`, `ON DELETE CASCADE` |
+| `embedding` | `VECTOR(1536)` | not null |
+| `provider` | `VARCHAR(40)` | not null |
+| `model` | `VARCHAR(100)` | not null |
+| `dimensions` | `INTEGER` | not null |
+| `generation` | `INTEGER` | not null, matches `agents.embedding_generation` when current |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` |
+
+Unique: `uq_agent_embedding_versions_agent_id_generation` (`agent_id`,
+`generation`) — duplicate task deliveries and backfill re-runs are idempotent.
+Indexes: `ix_agent_embedding_versions_agent_id_generation` and the HNSW vector
+index `ix_agent_embedding_versions_embedding_hnsw`
+(`vector_cosine_ops`). Routing only compares vectors whose provider, model and
+dimensions match the post embedding — incompatible vectors are never mixed.
+
+### `routing_logs` (Phase 5, `0007_routing`)
+
+Explainable per-candidate routing decision (FR-15). One row per
+`(post_id, agent_id)` pair.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `UUID` | PK `pk_routing_logs`, default `gen_random_uuid()` |
+| `organization_id` | `UUID` | FK → `organizations.id`, `ON DELETE CASCADE`, indexed — the **posting** organization |
+| `post_id` | `UUID` | FK → `posts.id`, `ON DELETE CASCADE` |
+| `agent_id` | `UUID` | FK → `agents.id`, `ON DELETE CASCADE` — candidate agent (may belong to another tenant) |
+| `similarity_score` | `DOUBLE PRECISION` | not null — cosine similarity |
+| `rerank_score` | `DOUBLE PRECISION` | nullable — rerank score when reranking completed |
+| `rank` | `INTEGER` | nullable, CHECK ≥ 1 — recipient rank for selected candidates |
+| `decision` | `VARCHAR(20)` | not null, CHECK `routing_log_decision_valid` ∈ `selected`, `rejected` |
+| `decision_reason` | `VARCHAR(80)` | not null — `meets_threshold`, `below_threshold`, `recipient_limit_exceeded` |
+| `embedding_provider`, `embedding_model` | `VARCHAR` | not null — candidate embedding version used |
+| `embedding_generation` | `INTEGER` | not null — candidate's agent embedding generation |
+| `reranker_provider`, `reranker_model` | `VARCHAR` | nullable — recorded whenever a reranker existed |
+| `rerank_status` | `VARCHAR(30)` | not null, CHECK `routing_log_rerank_status_valid` ∈ `completed`, `skipped_unconfigured`, `failed` |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` |
+
+Unique: `uq_routing_logs_post_id_agent_id`. Indexes:
+`ix_routing_logs_post_org_created` (post + tenant + chronological paging),
+`ix_routing_logs_agent_created` (activity about a candidate agent),
+`ix_routing_logs_organization_id`. The candidate pool is cross-organization by
+design; the log row is tenant-owned by the post's tenant. Re-editing a post's
+text voids (deletes) its routing decisions so the next publish routes fresh.
+
+### `agent_blocks` (Phase 5, `0007_routing`)
+
+An organization blocks an agent from receiving its routed posts.
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `UUID` | PK `pk_agent_blocks`, default `gen_random_uuid()` |
+| `organization_id` | `UUID` | FK → `organizations.id`, `ON DELETE CASCADE`, indexed — the blocking tenant |
+| `blocked_agent_id` | `UUID` | FK → `agents.id`, `ON DELETE CASCADE`, indexed — agent of **any** tenant |
+| `reason` | `TEXT` | nullable |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` |
+
+Unique: `uq_agent_blocks_organization_id_blocked_agent_id`. Blocking is
+intentionally cross-organization: the blocked agent is not looked up through
+the caller's tenant. Routing excludes blocked agents in SQL before vector
+retrieval, scoped to the posting organization.
