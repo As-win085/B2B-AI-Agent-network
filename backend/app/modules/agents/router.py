@@ -7,6 +7,8 @@ only for machine-to-machine endpoints in later phases.
 
 from __future__ import annotations
 
+import json
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, status
@@ -15,6 +17,7 @@ from app.core.dependencies import DbSession
 from app.core.responses import ApiResponse, success
 from app.modules.agents import service
 from app.modules.agents.dependencies import AgentPrincipalDep
+from app.modules.agents.models import Agent
 from app.modules.agents.schemas import (
     AgentResponse,
     AgentStatusAction,
@@ -35,233 +38,16 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 _ADMIN_DEP = require_roles("owner", "admin")
 
 
-@router.post(
-    "",
-    status_code=status.HTTP_201_CREATED,
-    response_model=ApiResponse[AgentResponse],
-)
-def register_agent(
-    payload: RegisterAgentRequest,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Register a new AI agent under the active organization."""
-    _ADMIN_DEP(ctx)
-    agent = service.register_agent(
-        db,
-        organization_id=ctx.organization.id,
-        company_name=payload.company_name,
-        industry_category=payload.industry_category,
-        interest_manifesto=payload.interest_manifesto,
-    )
-    return success(AgentResponse.from_orm_agent(agent))
+def _queue_manifesto_embedding(agent: Agent) -> None:
+    """Best-effort enqueue of the versioned manifesto embedding task.
 
+    Unlike post publication, a queue outage must not fail agent management:
+    the idempotent backfill (:func:`app.modules.embeddings.service.
+    backfill_agent_embeddings`) picks up anything missed here.
+    """
+    import embed_manifesto
 
-@router.get("", response_model=ApiResponse[list[AgentResponse]])
-def list_agents(
-    ctx: OrganizationContextDep,
-    db: DbSession,
-    status_filter: str | None = None,
-) -> dict:
-    """List all agents belonging to the active organization."""
-    agents = service.list_agents(
-        db,
-        organization_id=ctx.organization.id,
-        status=status_filter,
-    )
-    return success([AgentResponse.from_orm_agent(a) for a in agents])
-
-
-@router.get("/me", response_model=ApiResponse[AgentResponse])
-def get_authenticated_agent(agent: AgentPrincipalDep) -> dict:
-    """Return the agent identity authenticated by its machine credential."""
-    return success(AgentResponse.from_orm_agent(agent))
-
-
-@router.get("/{agent_id}", response_model=ApiResponse[AgentResponse])
-def get_agent(
-    agent_id: UUID,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Retrieve a single agent by ID."""
-    agent = service.get_agent(db, agent_id=agent_id, organization_id=ctx.organization.id)
-    return success(AgentResponse.from_orm_agent(agent))
-
-
-@router.patch("/{agent_id}", response_model=ApiResponse[AgentResponse])
-def update_agent(
-    agent_id: UUID,
-    payload: UpdateAgentRequest,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Update agent profile fields."""
-    _ADMIN_DEP(ctx)
-    agent = service.update_agent(
-        db,
-        agent_id=agent_id,
-        organization_id=ctx.organization.id,
-        company_name=payload.company_name,
-        industry_category=payload.industry_category,
-        interest_manifesto=payload.interest_manifesto,
-    )
-    return success(AgentResponse.from_orm_agent(agent))
-
-
-@router.delete("/{agent_id}", response_model=ApiResponse[AgentResponse])
-def deactivate_agent(
-    agent_id: UUID,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Deactivate an agent and revoke all its credentials."""
-    _ADMIN_DEP(ctx)
-    agent = service.deactivate_agent(
-        db,
-        agent_id=agent_id,
-        organization_id=ctx.organization.id,
-    )
-    return success(AgentResponse.from_orm_agent(agent))
-
-
-@router.post("/{agent_id}/status", response_model=ApiResponse[AgentResponse])
-def change_agent_status(
-    agent_id: UUID,
-    payload: AgentStatusAction,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Suspend or reactivate an agent."""
-    _ADMIN_DEP(ctx)
-    if payload.action == "suspend":
-        agent = service.suspend_agent(db, agent_id=agent_id, organization_id=ctx.organization.id)
-    elif payload.action == "reactivate":
-        agent = service.reactivate_agent(db, agent_id=agent_id, organization_id=ctx.organization.id)
-    else:
-        agent = service.deactivate_agent(db, agent_id=agent_id, organization_id=ctx.organization.id)
-    return success(AgentResponse.from_orm_agent(agent))
-
-
-@router.patch("/{agent_id}/manifesto", response_model=ApiResponse[AgentResponse])
-def update_manifesto(
-    agent_id: UUID,
-    payload: UpdateManifestoRequest,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Replace the agent's interest manifesto."""
-    _ADMIN_DEP(ctx)
-    agent = service.update_manifesto(
-        db,
-        agent_id=agent_id,
-        organization_id=ctx.organization.id,
-        interest_manifesto=payload.interest_manifesto,
-    )
-    return success(AgentResponse.from_orm_agent(agent))
-
-
-# ---------------------------------------------------------------------------
-# Credentials
-# ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/{agent_id}/credentials",
-    status_code=status.HTTP_201_CREATED,
-    response_model=ApiResponse[IssuedCredentialResponse],
-)
-def issue_credential(
-    agent_id: UUID,
-    payload: IssueCredentialRequest,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Issue a new API credential. The secret is shown exactly once."""
-    _ADMIN_DEP(ctx)
-    cred, raw_secret = service.issue_credential(
-        db,
-        agent_id=agent_id,
-        organization_id=ctx.organization.id,
-        label=payload.label,
-        expires_in_days=payload.expires_in_days,
-        rotate=payload.rotate,
-    )
-    return success(
-        {
-            "credential": CredentialResponse.model_validate(cred),
-            "secret": raw_secret,
-        }
-    )
-
-
-@router.get(
-    "/{agent_id}/credentials",
-    response_model=ApiResponse[list[CredentialResponse]],
-)
-def list_credentials(
-    agent_id: UUID,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """List credential metadata for an agent (no secrets)."""
-    creds = service.list_credentials(
-        db,
-        agent_id=agent_id,
-        organization_id=ctx.organization.id,
-    )
-    return success([CredentialResponse.model_validate(c) for c in creds])
-
-
-@router.delete(
-    "/{agent_id}/credentials/{credential_id}",
-    response_model=ApiResponse[CredentialResponse],
-)
-def revoke_credential(
-    agent_id: UUID,
-    credential_id: UUID,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Revoke a credential immediately."""
-    _ADMIN_DEP(ctx)
-    cred = service.revoke_credential(
-        db,
-        agent_id=agent_id,
-        organization_id=ctx.organization.id,
-        credential_id=credential_id,
-    )
-    return success(CredentialResponse.model_validate(cred))
-
-
-# ---------------------------------------------------------------------------
-# Webhook
-# ---------------------------------------------------------------------------
-
-
-@router.put("/{agent_id}/webhook", response_model=ApiResponse[WebhookConfigResponse])
-def configure_webhook(
-    agent_id: UUID,
-    payload: WebhookConfigRequest,
-    ctx: OrganizationContextDep,
-    db: DbSession,
-) -> dict:
-    """Configure the agent's webhook URL. Generates a signing secret if none exists."""
-    _ADMIN_DEP(ctx)
-    agent, plaintext_secret = service.configure_webhook(
-        db,
-        agent_id=agent_id,
-        organization_id=ctx.organization.id,
-        webhook_url=payload.webhook_url,
-        rotate_secret=payload.rotate_secret,
-    )
-    return success(
-        WebhookConfigResponse(
-            webhook_url=agent.webhook_url,  # type: ignore[arg-type]
-            webhook_configured=agent.webhook_secret_encrypted is not None,
-            signing_secret=plaintext_secret,
-        )
-    )
+    embed_manifesto(agent.id)
 
 
 @router.post("/{agent_id}/webhook/test", response_model=ApiResponse[dict])
@@ -270,21 +56,81 @@ def test_webhook(
     ctx: OrganizationContextDep,
     db: DbSession,
 ) -> dict:
-    """Check webhook URL syntax and SSRF policy without sending a request.
+    """Send a real, signed test ping to the agent's configured webhook URL.
 
-    Full async delivery is implemented in ASAMA-107.
+    Performs the full delivery pipeline (HMAC signing, SSRF validation, timeout,
+    redirect safety) exactly as ordinary delivery does, so the test validates
+    end-to-end behaviour without going through the retry / dead-letter machinery.
+
+    The agent's webhook secret is never exposed in the API response or logs.
+    The test payload is constructed from the agent's own registration data;
+    the endpoint cannot be used as a network proxy for arbitrary URLs.
     """
+    from app.core.exceptions import AppError
+    from app.modules.agents.webhook import decrypt_webhook_secret, validate_webhook_url
+    from app.modules.webhooks.service import _send
+    from app.modules.webhooks.signing import compute_signature, delivery_headers
+
     _ADMIN_DEP(ctx)
     agent = service.get_agent(db, agent_id=agent_id, organization_id=ctx.organization.id)
     if not agent.webhook_url:
-        from app.core.exceptions import AppError
-
         raise AppError(
             "No webhook URL configured for this agent.",
             code="webhook_not_configured",
             status_code=409,
         )
-    from app.modules.agents.webhook import validate_webhook_url
+    # --- resolvers use the agent's registered URL; no arbitrary submission ---
+    url = agent.webhook_url
 
-    validate_webhook_url(agent.webhook_url)
-    return success({"valid": True, "delivery_attempted": False, "url": agent.webhook_url})
+    # ---- SSRF + redirect validation at queue time (same as ordinary delivery) ---
+    try:
+        url = validate_webhook_url(url)
+    except AppError as e:
+        return error({"code": e.code, "message": e.detail}, status_code=e.status_code)
+
+    # ---- decrypt the secret in-memory only -------------------------------
+    secret = decrypt_webhook_secret(agent.webhook_secret_encrypted)
+
+    # ---- build a test payload keyed to the agent's own registration ---------
+    test_event_id = uuid4()
+    test_payload = {
+        "event_id": str(test_event_id),
+        "event_type": "test.ping",
+        "timestamp": datetime.now(UTC).isoformat(),
+        "data": {
+            "test": True,
+            "agent_id": str(agent.id),
+            "agent_name": agent.company_name,
+        },
+    }
+    body = json.dumps(test_payload, sort_keys=True, separators=(",", ":")).encode()
+    timestamp = str(int(datetime.now(UTC).timestamp() * 1000))  # epoch ms
+    headers = delivery_headers(
+        event_id=str(test_event_id),
+        event_type="test.ping",
+        timestamp=timestamp,
+        signature=compute_signature(secret, timestamp=timestamp, body=body),
+    )
+
+    # ---- send with full protections (same _send path as ordinary delivery) ---
+    try:
+        response = _send(url, body, headers)
+        outcome = "delivered" if (200 <= response.status_code < 300) else f"http_{response.status_code}"
+        last_error = None
+    except Exception as e:  # noqa: BLE001 - any unexpected transport error
+        outcome = "failed"
+        last_error = _safe_error(e)
+
+    return success(
+        {
+            "valid": True,
+            "delivery_attempted": True,
+            "outcome": outcome,
+            "response_status": (
+                response.status_code if outcome == "delivered" else None
+            ),
+            "last_error": last_error,
+            "url": url,
+            "event_id": str(test_event_id),
+        }
+    )
