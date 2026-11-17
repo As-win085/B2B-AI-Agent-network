@@ -31,6 +31,8 @@ export interface ApiRequestInit extends RequestInit {
   skipAuth?: boolean;
   /** Do not attempt a token refresh after a 401. */
   allowRefresh?: boolean;
+  /** Return the complete success envelope when pagination metadata is needed. */
+  includeMeta?: boolean;
 }
 
 let accessToken: string | null = null;
@@ -88,7 +90,7 @@ function refreshAccessToken(): Promise<string | null> {
 }
 
 export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
-  const { skipAuth = false, allowRefresh = true, ...requestInit } = init;
+  const { skipAuth = false, allowRefresh = true, includeMeta = false, ...requestInit } = init;
 
   const headers = new Headers(requestInit.headers);
   if (!headers.has("Accept")) {
@@ -123,7 +125,7 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
   }
 
   const body = (await response.json()) as ApiEnvelope<T>;
-  return body.data;
+  return (includeMeta ? body : body.data) as T;
 }
 
 export async function getHealth(signal?: AbortSignal): Promise<HealthResponse> {

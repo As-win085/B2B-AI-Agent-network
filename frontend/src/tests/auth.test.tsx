@@ -84,7 +84,7 @@ describe("authentication flow", () => {
     renderAt("/login");
     fillLogin();
 
-    expect(await screen.findByText(/welcome back, ada owner/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /workspace overview/i })).toBeInTheDocument();
     expect(login).toHaveBeenCalledWith({
       email: "owner@example.test",
       password: "correct horse battery staple",
@@ -112,7 +112,7 @@ describe("authentication flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Password must be at least 12 characters long.",
+      "Password must be at least 12 characters.",
     );
     expect(register).not.toHaveBeenCalled();
   });
@@ -132,7 +132,7 @@ describe("authentication flow", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
-    expect(await screen.findByText(/welcome back, ada owner/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /workspace overview/i })).toBeInTheDocument();
     expect(register).toHaveBeenCalledWith({
       email: "owner@example.test",
       password: "correct horse battery staple",
@@ -147,7 +147,7 @@ describe("authentication flow", () => {
 
     renderAt("/login");
     fillLogin();
-    await screen.findByText(/welcome back, ada owner/i);
+    await screen.findByRole("heading", { name: /workspace overview/i });
 
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
 

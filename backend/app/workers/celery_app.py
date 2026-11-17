@@ -14,7 +14,7 @@ celery_app = Celery(
     "asama",
     broker=settings.rabbitmq_url,
     backend=None,
-    include=["app.workers.routing_tasks", "app.workers.webhook_tasks"],
+    include=["app.workers.routing_tasks", "app.workers.webhook_tasks", "app.workers.post_tasks"],
 )
 
 celery_app.conf.update(

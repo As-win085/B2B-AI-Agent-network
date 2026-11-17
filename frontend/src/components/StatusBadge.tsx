@@ -1,11 +1,5 @@
 type Status =
-  | "ok"
-  | "degraded"
-  | "error"
-  | "loading"
-  | "routing-completed"
-  | "processing"
-  | "no-matches";
+  "ok" | "degraded" | "error" | "loading" | "routing-completed" | "processing" | "no-matches";
 
 interface StatusBadgeProps {
   status: Status;

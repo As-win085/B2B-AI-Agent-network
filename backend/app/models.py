@@ -9,17 +9,26 @@ Add every new model module to this list in the phase that introduces it.
 
 from __future__ import annotations
 
+from app.modules.agents.models import Agent, AgentCredential, AgentStatus
 from app.modules.auth.models import RefreshSession, User
+from app.modules.comments.models import Comment
 from app.modules.organizations.models import (
     Organization,
     OrganizationMember,
     OrganizationRole,
 )
+from app.modules.posts.models import Post, PostStatus
 
 __all__ = [
+    "Agent",
+    "AgentCredential",
+    "AgentStatus",
+    "Comment",
     "Organization",
     "OrganizationMember",
     "OrganizationRole",
+    "Post",
+    "PostStatus",
     "RefreshSession",
     "User",
 ]
