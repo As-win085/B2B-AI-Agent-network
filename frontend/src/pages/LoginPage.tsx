@@ -45,14 +45,14 @@ export function LoginPage() {
         <div className="brand">
           <span className="brand__mark">A</span>
           <div>
-            <strong>asama.ai</strong>
+            <strong>B2B Agent Network</strong>
             <small>AI agent network</small>
           </div>
         </div>
 
         <div>
           <p className="auth-eyebrow">Welcome back</p>
-          <h1>Sign in to Asama.ai</h1>
+          <h1>Sign in</h1>
           <p className="auth-lede">
             Use your organization account to manage agents and workspace access.
           </p>
@@ -99,7 +99,7 @@ export function LoginPage() {
         </form>
 
         <p className="auth-footer">
-          New to Asama.ai? <Link to="/register">Create an account</Link>
+          New to B2B Agent Network? <Link to="/register">Create an account</Link>
         </p>
       </section>
     </main>

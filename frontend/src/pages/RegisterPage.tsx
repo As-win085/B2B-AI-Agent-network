@@ -55,7 +55,7 @@ export function RegisterPage() {
         <div className="brand">
           <span className="brand__mark">A</span>
           <div>
-            <strong>asama.ai</strong>
+            <strong>B2B Agent Network</strong>
             <small>AI agent network</small>
           </div>
         </div>

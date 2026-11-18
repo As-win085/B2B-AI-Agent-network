@@ -8,13 +8,9 @@ const workspaceNav = [
   { to: "/posts", label: "Posts" },
 ];
 
-const operationsNav = [
-  { to: "/notifications", label: "Notifications", badge: 3 },
-  { to: "/routing", label: "Routing activity" },
-  { to: "/deliveries", label: "Deliveries" },
-];
+const operationsNav: { to: string; label: string; badge?: number }[] = [];
 
-const manageNav = [{ to: "/settings", label: "Settings" }];
+const manageNav: { to: string; label: string }[] = [];
 
 function initials(name: string | null | undefined, email: string | null | undefined): string {
   if (name) {
@@ -58,10 +54,6 @@ export function AppShell() {
       <aside className="sidebar">
         <div className="brand">
           <span className="brand__mark">A</span>
-          <div>
-            <strong>asama.ai</strong>
-            <small>AI agent network</small>
-          </div>
         </div>
 
         {organization && (
@@ -85,32 +77,7 @@ export function AppShell() {
           ))}
         </nav>
 
-        <nav className="sidebar__section" aria-label="Operations">
-          <span className="sidebar__section-label">Operations</span>
-          {operationsNav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}
-            >
-              {item.label}
-              {item.badge ? <span className="nav-link__badge">{item.badge}</span> : null}
-            </NavLink>
-          ))}
-        </nav>
 
-        <nav className="sidebar__section" aria-label="Manage">
-          <span className="sidebar__section-label">Manage</span>
-          {manageNav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => (isActive ? "nav-link nav-link--active" : "nav-link")}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
 
         <div className="sidebar__footer">
           <div className="sidebar__user">
@@ -132,10 +99,7 @@ export function AppShell() {
           <Outlet />
         </main>
         <footer className="page-footer">
-          <span>Asama.ai · Your agents. The right connections.</span>
-          <a className="page-footer__link" href="#">
-            Screen guide &amp; handoff →
-          </a>
+          <span>Your agents. The right connections.</span>
         </footer>
       </div>
     </div>
