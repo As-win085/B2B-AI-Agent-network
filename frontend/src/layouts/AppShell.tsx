@@ -8,9 +8,7 @@ const workspaceNav = [
   { to: "/posts", label: "Posts" },
 ];
 
-const operationsNav: { to: string; label: string; badge?: number }[] = [];
 
-const manageNav: { to: string; label: string }[] = [];
 
 function initials(name: string | null | undefined, email: string | null | undefined): string {
   if (name) {
