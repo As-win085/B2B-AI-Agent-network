@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     api_v1_prefix: str = "/api/v1"
     log_level: str = "INFO"
-    frontend_origin: str = "http://localhost:5173"
+    frontend_origins: str = "http://localhost:5173"
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        return [o.strip() for o in self.frontend_origins.split(",") if o.strip()]
 
     # Data stores
     database_url: str = Field(min_length=1)
